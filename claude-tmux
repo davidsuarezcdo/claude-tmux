@@ -1000,6 +1000,56 @@ def cmd_restore(attach_first: bool = False) -> None:
         os.execlp("tmux", "tmux", "attach", "-t", restored[0])
 
 
+def cmd_upgrade() -> None:
+    """Descarga la última versión del script desde GitHub y lo reemplaza."""
+    url    = "https://raw.githubusercontent.com/davidsuarezcdo/claude-tmux/main/claude-tmux"
+    target = Path(os.path.abspath(sys.argv[0]))
+
+    if not os.access(target, os.W_OK):
+        print(f"  ✗  Sin permiso de escritura en {target}", file=sys.stderr)
+        print(f"     Intenta: sudo claude-tmux upgrade", file=sys.stderr)
+        sys.exit(1)
+
+    curl = shutil.which("curl") or shutil.which("wget")
+    if not curl:
+        print("  ✗  Se requiere curl o wget para hacer upgrade.", file=sys.stderr)
+        sys.exit(1)
+
+    tmp = target.with_suffix(".tmp")
+    try:
+        if os.path.basename(curl) == "curl":
+            result = subprocess.run(
+                ["curl", "-fsSL", url, "-o", str(tmp)],
+                capture_output=True, text=True,
+            )
+        else:
+            result = subprocess.run(
+                ["wget", "-qO", str(tmp), url],
+                capture_output=True, text=True,
+            )
+
+        if result.returncode != 0:
+            print(f"  ✗  Error al descargar: {result.stderr.strip()}", file=sys.stderr)
+            tmp.unlink(missing_ok=True)
+            sys.exit(1)
+
+        # Verificar que el archivo descargado es el script correcto
+        content = tmp.read_text(encoding="utf-8", errors="ignore")
+        if "claude-tmux" not in content or "SESSION_PREFIX" not in content:
+            print("  ✗  El archivo descargado no parece válido.", file=sys.stderr)
+            tmp.unlink(missing_ok=True)
+            sys.exit(1)
+
+        tmp.chmod(0o755)
+        tmp.replace(target)
+        print(f"  ✓  claude-tmux actualizado en {target}")
+
+    except Exception as e:
+        tmp.unlink(missing_ok=True)
+        print(f"  ✗  Error inesperado: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
 def cmd_attach(name: str) -> None:
     session = f"{SESSION_PREFIX}-{name}"
     if not tmux_has_session(session):
@@ -1125,6 +1175,9 @@ def main() -> None:
     p_restart.add_argument("name", help="Nombre de la sesión")
     p_restart.add_argument("--no-attach", action="store_true", help="No hacer attach después de recrear")
 
+    # upgrade
+    sub.add_parser("upgrade", help="Actualizar claude-tmux a la última versión desde GitHub")
+
     args = parser.parse_args()
 
     if args.cmd == "start":
@@ -1149,6 +1202,8 @@ def main() -> None:
         cmd_kill(args.name)
     elif args.cmd == "restart":
         cmd_restart(args.name, no_attach=args.no_attach)
+    elif args.cmd == "upgrade":
+        cmd_upgrade()
     else:
         parser.print_help()
 

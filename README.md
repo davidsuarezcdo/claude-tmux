@@ -132,6 +132,7 @@ claude-tmux history
 claude-tmux restore [--attach]
 claude-tmux kill <name>
 claude-tmux restart <name> [--no-attach]
+claude-tmux upgrade
 ```
 
 | Command | Description |
@@ -143,6 +144,7 @@ claude-tmux restart <name> [--no-attach]
 | `restore` | Recreate all sessions from the registry (e.g. after reboot) |
 | `kill` | Terminate a tmux session, keep it in the registry |
 | `restart` | Kill and recreate a stuck session from the registry |
+| `upgrade` | Update claude-tmux to the latest version from GitHub |
 
 ---
 
