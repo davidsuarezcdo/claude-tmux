@@ -453,16 +453,16 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
         curses.init_pair(6, 8,                    -1)
         curses.init_pair(7, curses.COLOR_RED,     -1)
         curses.init_pair(8, curses.COLOR_BLUE,    -1)
-
-        C_HDR  = curses.color_pair(1) | curses.A_BOLD
-        C_RUN  = curses.color_pair(2) | curses.A_BOLD
-        C_NORM = curses.color_pair(3)
-        C_CUR  = curses.color_pair(4) | curses.A_BOLD
-        C_HELP = curses.color_pair(5)
-        C_DIM  = curses.color_pair(6)
-        C_ARCH = curses.color_pair(7)
-        C_TAB  = curses.color_pair(8)
-        C_SRCH = curses.color_pair(5) | curses.A_BOLD
+        C_HDR    = curses.color_pair(1) | curses.A_BOLD
+        C_RUN    = curses.color_pair(2) | curses.A_BOLD   # verde bold → carpetas/grupos
+        C_ACTIVE = curses.color_pair(3)                   # sin color → sesiones corriendo
+        C_NORM   = curses.color_pair(3)
+        C_CUR    = curses.color_pair(4) | curses.A_BOLD
+        C_HELP   = curses.color_pair(5)
+        C_DIM    = curses.color_pair(6)
+        C_ARCH   = curses.color_pair(7)
+        C_TAB    = curses.color_pair(8)
+        C_SRCH   = curses.color_pair(5) | curses.A_BOLD
 
         mode   = start_mode
         cursor = 0
@@ -474,6 +474,7 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
         rename_target = None
         del_target    = None
         del_arch      = False
+        restart_target = None
         name_prompt   = False   # pedir nombre de sesión al abrir historial
         name_buf      = ""
         name_item     = None    # history item pendiente de abrir
@@ -506,16 +507,26 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
             stdscr.clear()
             h, w = stdscr.getmaxyx()
 
-            # ── tabs ──
-            tabs = [(MODE_SESSIONS, "1 Sesiones"),
-                    (MODE_HISTORY,  "2 Historial"),
-                    (MODE_ARCHIVED, "3 Archivadas")]
-            put(0, 0, "  🤖 ", C_HDR)
-            tx = 6
+            # ── header ──
+            tabs = [(MODE_SESSIONS, "Sesiones"),
+                    (MODE_HISTORY,  "Historial"),
+                    (MODE_ARCHIVED, "Archivadas")]
+            # línea superior con título y pestañas
+            title = " claude-tmux "
+            put(0, 0, "▌", C_HDR)
+            put(0, 1, title, C_HDR)
+            tx = 1 + len(title) + 1
             for tm, tl in tabs:
-                lbl = f" {tl} "
-                put(0, tx, lbl, C_HDR if tm == mode else C_TAB)
-                tx += len(lbl) + 1
+                active = tm == mode
+                if active:
+                    put(0, tx,     "┤", C_HDR)
+                    put(0, tx + 1, f" {tl} ", C_HDR)
+                    put(0, tx + 2 + len(tl), "├", C_HDR)
+                    tx += len(tl) + 4
+                else:
+                    lbl = f"  {tl}  "
+                    put(0, tx, lbl, C_TAB)
+                    tx += len(lbl)
             put(1, 0, "─" * (w - 1), C_DIM)
 
             list_y = 2
@@ -558,7 +569,7 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                     attr  = C_CUR if ic else (C_RUN if sid in active_ids else C_NORM)
                     put(iy + i, 0, f"{pre}{tic}{proj:<18} {date:<12} {cnt:<5} {msg}", attr)
 
-                footer = "  ↑↓/jk navegar   Enter abrir   ESC/1 volver   Bksp borrar"
+                footer = "  [↑↓/jk] navegar  [↵] abrir  [⇥/⇤] pestaña  [q/ESC] salir  [⌫] borrar búsqueda"
 
             # ── sessions / archived mode ──
             else:
@@ -595,43 +606,61 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                         if is_cur:
                             pre, attr = " ❯ ", C_CUR
                         elif not is_sel:
-                            pre, attr = "   ", C_HDR
+                            pre, attr = "   ", C_RUN    # carpetas/grupos → verde bold
                         elif mode == MODE_ARCHIVED:
                             pre, attr = "   ", C_ARCH
                         elif is_att or is_run:
-                            pre, attr = "   ", C_RUN
+                            pre, attr = "   ", C_ACTIVE  # corriendo → verde sutil
                         else:
                             pre, attr = "   ", C_NORM
                         put(list_y + i, 0, pre + line.lstrip(), attr)
 
                 if mode == MODE_SESSIONS:
-                    footer = "  Enter attach   r renombrar   a archivar   d eliminar   2 hist   q salir"
+                    footer = "  [↵] attach  [r] renombrar  [a] archivar  [x] restart  [d] eliminar  [⇥/⇤] pestaña  [q] salir"
                 else:
-                    footer = "  Enter restaurar   d eliminar   1 sesiones   q salir"
+                    footer = "  [↵] restaurar  [d] eliminar  [⇥/⇤] pestaña  [q] salir"
 
             # ── nombre de sesión (historial) ──
             if name_prompt:
                 put(h - 2, 0, "─" * (w - 1), C_DIM)
                 put(h - 2, 0, f"  💬 Nombre de sesión: {name_buf}▌", C_SRCH)
-                footer = "  Enter confirmar   ESC cancelar"
+                footer = "  [↵] confirmar  [ESC] cancelar"
 
             # ── rename bar ──
             if rename_on:
                 put(h - 2, 0, "─" * (w - 1), C_DIM)
                 put(h - 2, 0, f"  ✏  Renombrar → {rename_buf}▌", C_SRCH)
-                footer = "  Enter confirmar   ESC cancelar"
+                footer = "  [↵] confirmar  [ESC] cancelar"
+
+            # ── restart confirm ──
+            if restart_target:
+                short = restart_target.removeprefix(SESSION_PREFIX + "-")
+                put(h - 2, 0, "─" * (w - 1), C_DIM)
+                put(h - 2, 0, f"  ↺  ¿Reiniciar '{short}'? (s/N)", C_CUR | curses.A_BOLD)
+                footer = "  [s/y] confirmar  [N] cancelar"
 
             # ── delete confirm ──
             if del_target:
                 short = del_target.removeprefix(SESSION_PREFIX + "-")
                 put(h - 2, 0, "─" * (w - 1), C_DIM)
                 put(h - 2, 0, f"  ⚠  ¿Eliminar '{short}'? (s/N)", C_ARCH | curses.A_BOLD)
-                footer = ""
+                footer = "  [s/y] confirmar  [N] cancelar"
 
             put(h - 1, 0, footer, C_HELP)
             stdscr.refresh()
 
             key = stdscr.getch()
+
+            # restart confirm
+            if restart_target:
+                if key in (ord("s"), ord("S"), ord("y"), ord("Y")):
+                    name = restart_target.removeprefix(SESSION_PREFIX + "-")
+                    restart_target = None
+                    pending[0] = ("restart_session", f"{SESSION_PREFIX}-{name}")
+                    break
+                else:
+                    restart_target = None
+                continue
 
             # delete confirm
             if del_target:
@@ -671,6 +700,19 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                     rename_buf += chr(key)
                 continue
 
+            # tab navigation (global, antes de bloques por modo)
+            _MODES = [MODE_SESSIONS, MODE_HISTORY, MODE_ARCHIVED]
+            if key == ord("\t"):
+                mode = _MODES[(_MODES.index(mode) + 1) % len(_MODES)]
+                cursor = 0; scroll = 0; query = ""
+                rows, extra = load_data()
+                continue
+            elif key == curses.KEY_BTAB:
+                mode = _MODES[(_MODES.index(mode) - 1) % len(_MODES)]
+                cursor = 0; scroll = 0; query = ""
+                rows, extra = load_data()
+                continue
+
             # history input
             if mode == MODE_HISTORY:
                 items      = rows
@@ -691,7 +733,7 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                         name_prompt = True
                         name_item   = item
                         name_buf    = f"{proj}-{item['sessionId'][:6]}"
-                elif key in (ord("q"), 27, ord("1")):
+                elif key in (ord("q"), 27):
                     mode = MODE_SESSIONS; cursor = 0; scroll = 0; query = ""
                     rows, extra = build_session_rows()
                 elif key in (curses.KEY_BACKSPACE, 127, 8):
@@ -719,19 +761,12 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
             elif key == ord("r") and mode == MODE_SESSIONS and sel:
                 rename_on = True; rename_target = sel
                 rename_buf = sel.removeprefix(SESSION_PREFIX + "-")
+            elif key == ord("x") and mode == MODE_SESSIONS and sel:
+                restart_target = sel
             elif key == ord("a") and mode == MODE_SESSIONS and sel:
                 dashboard_archive_session(sel); refresh()
             elif key == ord("d") and sel:
                 del_target = sel; del_arch = (mode == MODE_ARCHIVED)
-            elif key in (ord("h"), ord("2")):
-                mode = MODE_HISTORY; cursor = 0; scroll = 0; query = ""
-                rows, extra = load_history(), get_active_conv_ids()
-            elif key == ord("3"):
-                mode = MODE_ARCHIVED; cursor = 0; scroll = 0
-                rows, extra = build_archived_rows()
-            elif key == ord("1") and mode != MODE_SESSIONS:
-                mode = MODE_SESSIONS; cursor = 0; scroll = 0
-                rows, extra = build_session_rows()
             elif key in (ord("q"), 27):
                 break
 
@@ -743,7 +778,10 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
     if pending[0]:
         p = pending[0]
         action = p[0]
-        if action == "open_session":
+        if action == "restart_session":
+            name = p[1].removeprefix(SESSION_PREFIX + "-")
+            cmd_restart(name)
+        elif action == "open_session":
             dashboard_open_session(p[1])
         elif action in ("open_history", "open_history_named"):
             item         = p[1]
@@ -970,6 +1008,55 @@ def cmd_attach(name: str) -> None:
     os.execlp("tmux", "tmux", "attach", "-t", session)
 
 
+def cmd_kill(name: str) -> None:
+    """Mata la sesión tmux pero la conserva en el registry."""
+    session = f"{SESSION_PREFIX}-{name}"
+    if tmux_has_session(session):
+        tmux("kill-session", "-t", session)
+        print(f"✓ Sesión '{session}' terminada (conservada en registry).")
+    else:
+        print(f"  Sesión '{session}' no estaba corriendo.")
+    data = registry_load()
+    if session not in data["sessions"]:
+        print(f"  '{session}' tampoco está en el registry.", file=sys.stderr)
+
+
+def cmd_restart(name: str, no_attach: bool = False) -> None:
+    """Mata la sesión tmux atascada y la recrea desde el registry."""
+    session = f"{SESSION_PREFIX}-{name}"
+    data    = registry_load()
+    info    = data["sessions"].get(session)
+
+    if not info:
+        print(f"Sesión '{session}' no encontrada en el registry.", file=sys.stderr)
+        print("Usa 'claude-tmux list' para ver las sesiones disponibles.", file=sys.stderr)
+        sys.exit(1)
+
+    if tmux_has_session(session):
+        tmux("kill-session", "-t", session)
+        print(f"  ✗  Sesión anterior terminada.")
+
+    cwd       = info.get("path", os.getcwd())
+    resume_id = info.get("resume_id")
+    cmd       = build_claude_cmd(resume_id)
+
+    if not os.path.isdir(cwd):
+        print(f"  ⚠  El directorio ya no existe: {cwd}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"  ↺  Recreando '{session}'  [{info.get('group', '?')}]")
+    print(f"     Path   : {shorten_path(cwd)}")
+    if resume_id:
+        print(f"     Resume : {resume_id[:8]}…")
+
+    tmux("new-session", "-s", session, "-c", cwd, "-n", name, "-d",
+         build_tmux_cmd(cmd, session))
+    print(f"  ✓  Sesión recreada.")
+
+    if not no_attach:
+        os.execlp("tmux", "tmux", "attach", "-t", session)
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -1029,6 +1116,15 @@ def main() -> None:
     # history
     sub.add_parser("history", help="Explorar historial de Claude con búsqueda")
 
+    # kill
+    p_kill = sub.add_parser("kill", help="Terminar sesión tmux sin borrarla del registry")
+    p_kill.add_argument("name", help="Nombre de la sesión")
+
+    # restart
+    p_restart = sub.add_parser("restart", help="Matar y recrear sesión atascada desde el registry")
+    p_restart.add_argument("name", help="Nombre de la sesión")
+    p_restart.add_argument("--no-attach", action="store_true", help="No hacer attach después de recrear")
+
     args = parser.parse_args()
 
     if args.cmd == "start":
@@ -1049,6 +1145,10 @@ def main() -> None:
         cmd_history()
     elif args.cmd == "restore":
         cmd_restore(attach_first=args.attach)
+    elif args.cmd == "kill":
+        cmd_kill(args.name)
+    elif args.cmd == "restart":
+        cmd_restart(args.name, no_attach=args.no_attach)
     else:
         parser.print_help()
 
