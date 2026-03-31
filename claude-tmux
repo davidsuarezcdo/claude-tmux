@@ -22,6 +22,7 @@ from pathlib import Path
 
 SESSION_PREFIX = "claude"
 REGISTRY_PATH = Path.home() / ".config" / "claude-tmux" / "registry.json"
+PAD = 2
 
 
 # ── Registry ──────────────────────────────────────────────────────────────────
@@ -478,6 +479,8 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
         name_prompt   = False   # pedir nombre de sesión al abrir historial
         name_buf      = ""
         name_item     = None    # history item pendiente de abrir
+        new_sess_prompt = False
+        new_sess_buf    = ""
 
         def load_data():
             if mode == MODE_SESSIONS:
@@ -503,20 +506,12 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                 except curses.error:
                     pass
 
-        while True:
-            stdscr.clear()
-            h, w = stdscr.getmaxyx()
-
-            # ── header ──
-            tabs = [(MODE_SESSIONS, "Sesiones"),
-                    (MODE_HISTORY,  "Historial"),
-                    (MODE_ARCHIVED, "Archivadas")]
-            # línea superior con título y pestañas
+        def draw_header():
             title = " claude-tmux "
-            put(0, 0, "▌", C_HDR)
-            put(0, 1, title, C_HDR)
-            tx = 1 + len(title) + 1
-            for tm, tl in tabs:
+            put(0, PAD, "▌", C_HDR)
+            put(0, PAD + 1, title, C_HDR)
+            tx = PAD + 1 + len(title) + 1
+            for tm, tl in [(MODE_SESSIONS, "Sesiones"), (MODE_HISTORY, "Historial"), (MODE_ARCHIVED, "Archivadas")]:
                 active = tm == mode
                 if active:
                     put(0, tx,     "┤", C_HDR)
@@ -527,129 +522,165 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                     lbl = f"  {tl}  "
                     put(0, tx, lbl, C_TAB)
                     tx += len(lbl)
-            put(1, 0, "─" * (w - 1), C_DIM)
+            put(1, PAD, "─" * (w - 1 - PAD), C_DIM)
 
-            list_y = 2
-
-            # ── history mode ──
-            if mode == MODE_HISTORY:
-                items      = rows
-                active_ids = extra
-                if query:
-                    q        = query.lower()
-                    filtered = [it for it in items
-                                if q in it["first_msg"].lower()
-                                or q in os.path.basename(it["project"]).lower()]
-                else:
-                    filtered = items
-                cs = min(cursor, max(0, len(filtered) - 1))
-
-                put(list_y,     0, "  🔍 ", C_SRCH)
-                put(list_y,     5, (query + "▌")[:w - 6], C_SRCH)
-                put(list_y + 1, 0, "─" * (w - 1), C_DIM)
-                put(list_y + 2, 0, f"  {len(filtered)}/{len(items)} conversaciones", C_DIM)
-
-                iy  = list_y + 3
-                vis = h - iy - 2
-                if cs < scroll:
-                    scroll = cs
-                elif cs >= scroll + vis:
-                    scroll = cs - vis + 1
-
-                for i, item in enumerate(filtered[scroll:scroll + vis]):
-                    ri    = i + scroll
-                    sid   = item["sessionId"]
-                    proj  = os.path.basename(item["project"]) if item["project"] else "?"
-                    msg   = item["first_msg"][:max(0, w - 50)].replace("\n", " ")
-                    date  = fmt_ts(item["last_ts"])
-                    tic   = "🟢 " if sid in active_ids else "   "
-                    cnt   = f"({item['count']})"
-                    ic    = ri == cs
-                    pre   = " ❯ " if ic else "   "
-                    attr  = C_CUR if ic else (C_RUN if sid in active_ids else C_NORM)
-                    put(iy + i, 0, f"{pre}{tic}{proj:<18} {date:<12} {cnt:<5} {msg}", attr)
-
-                footer = "  [↑↓/jk] navegar  [↵] abrir  [⇥/⇤] pestaña  [q/ESC] salir  [⌫] borrar búsqueda"
-
-            # ── sessions / archived mode ──
+        def draw_history_tab() -> tuple:
+            """Dibuja el tab de historial. Retorna (footer, filtered, cs)."""
+            nonlocal scroll
+            items      = rows
+            active_ids = extra
+            if query:
+                q        = query.lower()
+                filtered = [it for it in items
+                            if q in it["first_msg"].lower()
+                            or q in os.path.basename(it["project"]).lower()]
             else:
-                sr    = rows
-                sl    = extra
-                sidx  = [i for i, r in enumerate(sr) if r[1]]
-                cs    = min(cursor, max(0, len(sidx) - 1))
-                vis   = h - list_y - 2
+                filtered = items
+            cs = min(cursor, max(0, len(filtered) - 1))
 
-                if sidx:
-                    ac = sidx[cs]
-                    if ac < scroll:
-                        scroll = ac
-                    elif ac >= scroll + vis:
-                        scroll = ac - vis + 1
+            put(list_y,     PAD, "🔍 ", C_SRCH)
+            put(list_y,     PAD + 3, (query + "▌")[:w - PAD - 4], C_SRCH)
+            put(list_y + 1, PAD, "─" * (w - 1 - PAD), C_DIM)
+            put(list_y + 2, PAD, f"  {len(filtered)}/{len(items)} conversaciones", C_DIM)
 
-                if not sr:
-                    put(list_y + 2, 2,
-                        "No hay sesiones en el registry." if mode == MODE_SESSIONS
-                        else "No hay sesiones archivadas.", C_DIM)
-                else:
-                    for i in range(min(vis, len(sr) - scroll)):
-                        ri   = scroll + i
-                        if ri >= len(sr):
-                            break
-                        row  = sr[ri]
-                        line = sl[ri]
-                        if not line:
-                            continue
-                        is_sel  = row[1]
-                        is_att  = row[2] if len(row) > 2 else False
-                        is_run  = row[3] if len(row) > 3 else False
-                        is_cur  = is_sel and bool(sidx) and sidx[cs] == ri
-                        if is_cur:
-                            pre, attr = " ❯ ", C_CUR
-                        elif not is_sel:
-                            pre, attr = "   ", C_RUN    # carpetas/grupos → verde bold
-                        elif mode == MODE_ARCHIVED:
-                            pre, attr = "   ", C_ARCH
-                        elif is_att or is_run:
-                            pre, attr = "   ", C_ACTIVE  # corriendo → verde sutil
-                        else:
-                            pre, attr = "   ", C_NORM
-                        put(list_y + i, 0, pre + line.lstrip(), attr)
+            iy  = list_y + 3
+            vis = h - iy - 2
+            sc  = scroll
+            if cs < sc:
+                sc = cs
+            elif cs >= sc + vis:
+                sc = cs - vis + 1
+            scroll = sc
 
-                if mode == MODE_SESSIONS:
-                    footer = "  [↵] attach  [r] renombrar  [a] archivar  [x] restart  [d] eliminar  [⇥/⇤] pestaña  [q] salir"
-                else:
-                    footer = "  [↵] restaurar  [d] eliminar  [⇥/⇤] pestaña  [q] salir"
+            for i, item in enumerate(filtered[sc:sc + vis]):
+                ri    = i + sc
+                sid   = item["sessionId"]
+                proj  = os.path.basename(item["project"]) if item["project"] else "?"
+                msg   = item["first_msg"][:max(0, w - 50)].replace("\n", " ")
+                date  = fmt_ts(item["last_ts"])
+                tic   = "🟢 " if sid in active_ids else "   "
+                cnt   = f"({item['count']})"
+                ic    = ri == cs
+                pre   = " ❯ " if ic else "   "
+                attr  = C_CUR if ic else (C_RUN if sid in active_ids else C_NORM)
+                put(iy + i, PAD, f"{pre}{tic}{proj:<18} {date:<12} {cnt:<5} {msg}", attr)
 
-            # ── nombre de sesión (historial) ──
+            footer = "  [↑↓/jk] navegar  [↵] abrir  [⇥/⇤] pestaña  [q/ESC] salir  [⌫] borrar búsqueda"
+            return footer, filtered, cs
+
+        def draw_sessions_tab() -> tuple:
+            """Dibuja el tab de sesiones/archivadas. Retorna (footer, sidx, cs, sel)."""
+            nonlocal scroll
+            sr   = rows
+            sl   = extra
+            sidx = [i for i, r in enumerate(sr) if r[1]]
+            cs   = min(cursor, max(0, len(sidx) - 1))
+            vis  = h - list_y - 2
+
+            if sidx:
+                ac = sidx[cs]
+                if ac < scroll:
+                    scroll = ac
+                elif ac >= scroll + vis:
+                    scroll = ac - vis + 1
+
+            if not sr:
+                put(list_y + 2, PAD + 2,
+                    "No hay sesiones en el registry." if mode == MODE_SESSIONS
+                    else "No hay sesiones archivadas.", C_DIM)
+            else:
+                for i in range(min(vis, len(sr) - scroll)):
+                    ri   = scroll + i
+                    if ri >= len(sr):
+                        break
+                    row  = sr[ri]
+                    line = sl[ri]
+                    if not line:
+                        continue
+                    is_sel  = row[1]
+                    is_att  = row[2] if len(row) > 2 else False
+                    is_run  = row[3] if len(row) > 3 else False
+                    is_cur  = is_sel and bool(sidx) and sidx[cs] == ri
+                    if is_cur:
+                        pre, attr = " ❯ ", C_CUR
+                    elif not is_sel:
+                        pre, attr = "   ", C_RUN
+                    elif mode == MODE_ARCHIVED:
+                        pre, attr = "   ", C_ARCH
+                    elif is_att or is_run:
+                        pre, attr = "   ", C_ACTIVE
+                    else:
+                        pre, attr = "   ", C_NORM
+                    put(list_y + i, PAD, pre + line.lstrip(), attr)
+
+            sel    = sr[sidx[cs]][0] if sidx else None
+            footer = ("  [↵] attach  [n] nueva  [r] renombrar  [a] archivar  [x] restart  [d] eliminar  [⇥/⇤] pestaña  [q] salir"
+                      if mode == MODE_SESSIONS
+                      else "  [↵] restaurar  [d] eliminar  [⇥/⇤] pestaña  [q] salir")
+            return footer, sidx, cs, sel
+
+        def draw_overlays(footer: str) -> str:
+            """Dibuja barras de overlay (prompts/confirmaciones). Retorna footer actualizado."""
+            if new_sess_prompt:
+                put(h - 2, PAD, "─" * (w - 1 - PAD), C_DIM)
+                put(h - 2, PAD, f"  ✦  Nueva sesión: {new_sess_buf}▌", C_SRCH)
+                footer = "  [↵] crear  [ESC] cancelar"
             if name_prompt:
-                put(h - 2, 0, "─" * (w - 1), C_DIM)
-                put(h - 2, 0, f"  💬 Nombre de sesión: {name_buf}▌", C_SRCH)
+                put(h - 2, PAD, "─" * (w - 1 - PAD), C_DIM)
+                put(h - 2, PAD, f"  💬 Nombre de sesión: {name_buf}▌", C_SRCH)
                 footer = "  [↵] confirmar  [ESC] cancelar"
-
-            # ── rename bar ──
             if rename_on:
-                put(h - 2, 0, "─" * (w - 1), C_DIM)
-                put(h - 2, 0, f"  ✏  Renombrar → {rename_buf}▌", C_SRCH)
+                put(h - 2, PAD, "─" * (w - 1 - PAD), C_DIM)
+                put(h - 2, PAD, f"  ✏  Renombrar → {rename_buf}▌", C_SRCH)
                 footer = "  [↵] confirmar  [ESC] cancelar"
-
-            # ── restart confirm ──
             if restart_target:
                 short = restart_target.removeprefix(SESSION_PREFIX + "-")
-                put(h - 2, 0, "─" * (w - 1), C_DIM)
-                put(h - 2, 0, f"  ↺  ¿Reiniciar '{short}'? (s/N)", C_CUR | curses.A_BOLD)
+                put(h - 2, PAD, "─" * (w - 1 - PAD), C_DIM)
+                put(h - 2, PAD, f"  ↺  ¿Reiniciar '{short}'? (s/N)", C_CUR | curses.A_BOLD)
                 footer = "  [s/y] confirmar  [N] cancelar"
-
-            # ── delete confirm ──
             if del_target:
                 short = del_target.removeprefix(SESSION_PREFIX + "-")
-                put(h - 2, 0, "─" * (w - 1), C_DIM)
-                put(h - 2, 0, f"  ⚠  ¿Eliminar '{short}'? (s/N)", C_ARCH | curses.A_BOLD)
+                put(h - 2, PAD, "─" * (w - 1 - PAD), C_DIM)
+                put(h - 2, PAD, f"  ⚠  ¿Eliminar '{short}'? (s/N)", C_ARCH | curses.A_BOLD)
                 footer = "  [s/y] confirmar  [N] cancelar"
+            return footer
 
-            put(h - 1, 0, footer, C_HELP)
+        list_y = 3
+
+        while True:
+            stdscr.clear()
+            h, w = stdscr.getmaxyx()
+
+            draw_header()
+
+            if mode == MODE_HISTORY:
+                footer, filtered, cs = draw_history_tab()
+            else:
+                footer, sidx, cs, sel = draw_sessions_tab()
+
+            footer = draw_overlays(footer)
+            put(h - 1, PAD, footer, C_HELP)
             stdscr.refresh()
 
             key = stdscr.getch()
+
+            # ── overlay input handlers ──
+
+            # new session input
+            if new_sess_prompt:
+                if key in (curses.KEY_ENTER, ord("\n"), ord("\r")):
+                    name = new_sess_buf.strip().replace(" ", "-") or None
+                    new_sess_prompt = False; new_sess_buf = ""
+                    if name:
+                        pending[0] = ("new_session", name)
+                        break
+                elif key == 27:
+                    new_sess_prompt = False; new_sess_buf = ""
+                elif key in (curses.KEY_BACKSPACE, 127, 8):
+                    new_sess_buf = new_sess_buf[:-1]
+                elif 32 <= key <= 126 and chr(key) not in "/":
+                    new_sess_buf += chr(key)
+                continue
 
             # restart confirm
             if restart_target:
@@ -700,7 +731,7 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                     rename_buf += chr(key)
                 continue
 
-            # tab navigation (global, antes de bloques por modo)
+            # ── tab navigation ──
             _MODES = [MODE_SESSIONS, MODE_HISTORY, MODE_ARCHIVED]
             if key == ord("\t"):
                 mode = _MODES[(_MODES.index(mode) + 1) % len(_MODES)]
@@ -713,15 +744,9 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                 rows, extra = load_data()
                 continue
 
-            # history input
+            # ── history navigation ──
             if mode == MODE_HISTORY:
-                items      = rows
-                active_ids = extra
-                flt = ([it for it in items
-                        if query.lower() in it["first_msg"].lower()
-                        or query.lower() in os.path.basename(it["project"]).lower()]
-                       if query else items)
-                cs  = min(cursor, max(0, len(flt) - 1))
+                flt = filtered
                 if key in (curses.KEY_UP, ord("k")) and cursor > 0:
                     cursor -= 1
                 elif key in (curses.KEY_DOWN, ord("j")) and cursor < len(flt) - 1:
@@ -742,12 +767,7 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                     query += chr(key); cursor = 0; scroll = 0
                 continue
 
-            # sessions / archived input
-            sr   = rows
-            sidx = [i for i, r in enumerate(sr) if r[1]]
-            cs   = min(cursor, max(0, len(sidx) - 1))
-            sel  = sr[sidx[cs]][0] if sidx else None
-
+            # ── sessions / archived navigation ──
             if key in (curses.KEY_UP, ord("k")) and cursor > 0:
                 cursor -= 1
             elif key in (curses.KEY_DOWN, ord("j")) and cursor < len(sidx) - 1:
@@ -763,6 +783,8 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                 rename_buf = sel.removeprefix(SESSION_PREFIX + "-")
             elif key == ord("x") and mode == MODE_SESSIONS and sel:
                 restart_target = sel
+            elif key == ord("n") and mode == MODE_SESSIONS:
+                new_sess_prompt = True; new_sess_buf = ""
             elif key == ord("a") and mode == MODE_SESSIONS and sel:
                 dashboard_archive_session(sel); refresh()
             elif key == ord("d") and sel:
@@ -781,6 +803,11 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
         if action == "restart_session":
             name = p[1].removeprefix(SESSION_PREFIX + "-")
             cmd_restart(name)
+        elif action == "new_session":
+            name  = p[1]
+            cwd   = os.getcwd()
+            group = detect_group(cwd)
+            cmd_start(name, group, None, cwd)
         elif action == "open_session":
             dashboard_open_session(p[1])
         elif action in ("open_history", "open_history_named"):
