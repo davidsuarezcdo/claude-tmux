@@ -513,8 +513,8 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
             hy = HEADER_TOP
             for li, line in enumerate(LOGO):
                 put(hy + li, PAD, line, C_HDR)
-            # tabs debajo del logo
-            ty = hy + len(LOGO)
+            # tabs debajo del logo (con una línea de separación)
+            ty = hy + len(LOGO) + 1
             tx = PAD
             for tm, tl in [(MODE_SESSIONS, "Sesiones"), (MODE_HISTORY, "Historial"), (MODE_ARCHIVED, "Archivadas")]:
                 active = tm == mode
@@ -653,7 +653,7 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                 footer = "  [s/y] confirmar  [N] cancelar"
             return footer
 
-        list_y = HEADER_TOP + len(LOGO) + 2
+        list_y = HEADER_TOP + len(LOGO) + 3
 
         while True:
             stdscr.clear()
