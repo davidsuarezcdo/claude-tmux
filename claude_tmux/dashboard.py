@@ -193,7 +193,11 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                     is_att  = row[2] if len(row) > 2 else False
                     is_run  = row[3] if len(row) > 3 else False
                     is_cur  = is_sel and bool(sidx) and sidx[cs] == ri
-                    if not is_sel:
+                    row_type = row[4] if len(row) > 4 else "group"
+                    if not is_sel and row_type == "pane":
+                        # sub-agente del team — más indentado, color dim
+                        put(list_y + i, 9, line.lstrip(), C_DIM)
+                    elif not is_sel:
                         # group header — alineado con el header bar
                         put(list_y + i, PAD, line.lstrip(), C_RUN)
                     else:

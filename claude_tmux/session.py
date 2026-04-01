@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .registry import registry_load, registry_save, registry_add
-from .tmux import tmux, tmux_has_session, tmux_active_sessions
+from .tmux import tmux, tmux_has_session, tmux_active_sessions, tmux_session_panes
 
 SESSION_PREFIX = "claude"
 
@@ -156,7 +156,13 @@ def build_session_rows() -> tuple[list[tuple], list[str]]:
         else:
             icon = "○"   # solo en registry, no en tmux
         lines.append(f"    {icon} {short}")
-        rows.append((session, True, is_attached, is_running))
+        rows.append((session, True, is_attached, is_running, "session"))
+        # panes extra = agentes del team (solo si la sesión está corriendo)
+        if is_running:
+            for pane in tmux_session_panes(session):
+                icon_p = "▸" if pane["active"] else "·"
+                lines.append(f"      {icon_p} agent {pane['index']}  [{pane['command']}]")
+                rows.append((None, False, False, False, "pane"))
 
     for group, entries in sorted(groups.items()):
         sample_path = shorten_path(os.path.dirname(entries[0][1].get("path", "")))
