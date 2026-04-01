@@ -22,14 +22,16 @@ Working with Claude Code on multiple projects means constant interruption: closi
 
 | Feature | Description |
 |---|---|
-| **Interactive TUI dashboard** | Three tabs: Sessions / History / Archived — navigate with keyboard |
+| **Interactive TUI dashboard** | ASCII logo header, three tabs: Sessions / History / Archived |
 | **Project grouping** | Auto-detects Git root to group sessions by repo |
+| **New session from dashboard** | Press `n` to create a session with a custom name without leaving the UI |
 | **Auto-restart on crash** | Ctrl+C kills Claude, the wrapper loop relaunches it immediately |
 | **Compaction tracking** | Detects session ID changes after context compaction and syncs the registry |
 | **Persistent registry** | `~/.config/claude-tmux/registry.json` — survives server reboots |
 | **`restore` command** | Recreates all tmux sessions from the registry after a reboot |
 | **`restart` command** | Kills and recreates a stuck session without losing registry state |
 | **`kill` command** | Terminates a tmux session while keeping it in the registry |
+| **`upgrade` command** | Self-updates to the latest version from GitHub |
 | **History browser** | Browse past Claude conversations, search by project, and reopen any of them |
 | **Archive** | Move sessions out of the way without deleting them |
 
@@ -83,17 +85,21 @@ claude-tmux attach my-feature
 The TUI dashboard gives you a live view of every agent and project.
 
 ```
-▌ claude-tmux  ┤ Sesiones ├  Historial   Archivadas
-─────────────────────────────────────────────────────────────────
+  ▄▖▜      ▌    ▗
+  ▌ ▐ ▀▌▌▌▛▌█▌  ▜▘▛▛▌▌▌▚▘
+  ▙▖▐▖█▌▙▌▙▌▙▖  ▐▖▌▌▌▙▌▞▖
 
-  ◆ heroes-tickets
-    ▶ tickets-cobranza      ~/repos/heroes-tickets  03/28  3
-    ● sync-pagos            ~/repos/heroes-tickets  03/27  1
+  ┤ Sesiones ├  Historial  Archivadas
+  ─────────────────────────────────────────────────────────────
 
-  ◆ another-project
-    ○ refactor-api          ~/repos/another-project 03/26  5
+  ◆ heroes-tickets  ~/repos
+       ▶ tickets-cobranza
+       ● sync-pagos
 
-  [↑↓/jk] navegar  [↵] attach  [⇥/⇤] pestaña  [q] salir
+  ◆ another-project  ~/repos
+       ○ refactor-api
+
+  [↵] attach  [n] nueva  [r] renombrar  [a] archivar  [x] restart  [d] eliminar  [⇥/⇤] pestaña  [q] salir
 ```
 
 ### Session Icons
@@ -111,6 +117,7 @@ The TUI dashboard gives you a live view of every agent and project.
 |-----|--------|
 | `↑↓` / `jk` | Navigate |
 | `Enter` | Attach to session |
+| `n` | New session (with name prompt) |
 | `Tab` / `Shift+Tab` | Switch tabs |
 | `r` | Rename session |
 | `a` | Archive session |
