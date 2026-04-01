@@ -24,6 +24,11 @@ SESSION_PREFIX = "claude"
 REGISTRY_PATH = Path.home() / ".config" / "claude-tmux" / "registry.json"
 PAD        = 2   # left padding (horizontal)
 HEADER_TOP = 2   # blank rows before the header bar (vertical top margin)
+LOGO = (
+    "▄▖▜      ▌    ▗        ",
+    "▌ ▐ ▀▌▌▌▛▌█▌  ▜▘▛▛▌▌▌▚▘",
+    "▙▖▐▖█▌▙▌▙▌▙▖  ▐▖▌▌▌▙▌▞▖",
+)
 
 
 # ── Registry ──────────────────────────────────────────────────────────────────
@@ -505,11 +510,11 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                     pass
 
         def draw_header():
-            title = " claude-tmux "
             hy = HEADER_TOP
-            put(hy,     PAD, "▌", C_HDR)
-            put(hy,     PAD + 1, title, C_HDR)
-            tx = PAD + 1 + len(title) + 1
+            for li, line in enumerate(LOGO):
+                put(hy + li, PAD, line, C_HDR)
+            # tabs inline con la primera línea del logo
+            tx = PAD + len(LOGO[0].rstrip()) + 3
             for tm, tl in [(MODE_SESSIONS, "Sesiones"), (MODE_HISTORY, "Historial"), (MODE_ARCHIVED, "Archivadas")]:
                 active = tm == mode
                 if active:
@@ -521,7 +526,7 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                     lbl = f"  {tl}  "
                     put(hy, tx, lbl, C_TAB)
                     tx += len(lbl)
-            put(hy + 1, PAD, "─" * (w - 1 - PAD), C_DIM)
+            put(hy + len(LOGO), PAD, "─" * (w - 1 - PAD), C_DIM)
 
         def draw_history_tab() -> tuple:
             """Dibuja el tab de historial. Retorna (footer, filtered, cs)."""
@@ -647,7 +652,7 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                 footer = "  [s/y] confirmar  [N] cancelar"
             return footer
 
-        list_y = HEADER_TOP + 2
+        list_y = HEADER_TOP + len(LOGO) + 1
 
         while True:
             stdscr.clear()
