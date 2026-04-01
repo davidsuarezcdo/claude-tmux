@@ -22,7 +22,8 @@ from pathlib import Path
 
 SESSION_PREFIX = "claude"
 REGISTRY_PATH = Path.home() / ".config" / "claude-tmux" / "registry.json"
-PAD = 4
+PAD        = 2   # left padding (horizontal)
+HEADER_TOP = 2   # blank rows before the header bar (vertical top margin)
 
 
 # ── Registry ──────────────────────────────────────────────────────────────────
@@ -505,21 +506,22 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
 
         def draw_header():
             title = " claude-tmux "
-            put(0, PAD, "▌", C_HDR)
-            put(0, PAD + 1, title, C_HDR)
+            hy = HEADER_TOP
+            put(hy,     PAD, "▌", C_HDR)
+            put(hy,     PAD + 1, title, C_HDR)
             tx = PAD + 1 + len(title) + 1
             for tm, tl in [(MODE_SESSIONS, "Sesiones"), (MODE_HISTORY, "Historial"), (MODE_ARCHIVED, "Archivadas")]:
                 active = tm == mode
                 if active:
-                    put(0, tx,     "┤", C_HDR)
-                    put(0, tx + 1, f" {tl} ", C_HDR)
-                    put(0, tx + 2 + len(tl), "├", C_HDR)
+                    put(hy, tx,     "┤", C_HDR)
+                    put(hy, tx + 1, f" {tl} ", C_HDR)
+                    put(hy, tx + 2 + len(tl), "├", C_HDR)
                     tx += len(tl) + 4
                 else:
                     lbl = f"  {tl}  "
-                    put(0, tx, lbl, C_TAB)
+                    put(hy, tx, lbl, C_TAB)
                     tx += len(lbl)
-            put(1, PAD, "─" * (w - 1 - PAD), C_DIM)
+            put(hy + 1, PAD, "─" * (w - 1 - PAD), C_DIM)
 
         def draw_history_tab() -> tuple:
             """Dibuja el tab de historial. Retorna (footer, filtered, cs)."""
@@ -611,7 +613,7 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                             pre, attr = "   ", C_ACTIVE
                         else:
                             pre, attr = "   ", C_NORM
-                        put(list_y + i, PAD + 6, pre + line.lstrip(), attr)
+                        put(list_y + i, 5, pre + line.lstrip(), attr)
 
             sel    = sr[sidx[cs]][0] if sidx else None
             footer = ("  [↵] attach  [n] nueva  [r] renombrar  [a] archivar  [x] restart  [d] eliminar  [⇥/⇤] pestaña  [q] salir"
@@ -645,7 +647,7 @@ def run_dashboard(start_mode: str = MODE_SESSIONS) -> None:
                 footer = "  [s/y] confirmar  [N] cancelar"
             return footer
 
-        list_y = 3
+        list_y = HEADER_TOP + 2
 
         while True:
             stdscr.clear()
