@@ -290,18 +290,18 @@ def build_session_rows() -> tuple[list[tuple], list[str]]:
 
     def add_session(session, meta, is_running, is_attached):
         short = session.removeprefix(SESSION_PREFIX + "-")
-        path  = shorten_path(meta.get("path", ""))
         if is_attached:
             icon = "▶"   # activa y conectada
         elif is_running:
             icon = "●"   # corriendo en background
         else:
             icon = "○"   # solo en registry, no en tmux
-        lines.append(f"    {icon} {short:<25}  {path}")
+        lines.append(f"    {icon} {short}")
         rows.append((session, True, is_attached, is_running))
 
     for group, entries in sorted(groups.items()):
-        lines.append(f"  ◆ {group}")
+        sample_path = shorten_path(os.path.dirname(entries[0][1].get("path", "")))
+        lines.append(f"  ◆ {group}  {sample_path}")
         rows.append((None, False, False, False))
         for entry in sorted(entries, key=lambda x: x[0]):
             add_session(*entry)
@@ -357,12 +357,12 @@ def build_archived_rows() -> tuple[list[tuple], list[str]]:
         else:
             ungrouped.append((session, meta))
     for group, entries in sorted(groups.items()):
-        lines.append(f"  ◆ {group}")
+        sample_path = shorten_path(os.path.dirname(entries[0][1].get("path", "")))
+        lines.append(f"  ◆ {group}  {sample_path}")
         rows.append((None, False, False, False))
         for session, meta in sorted(entries):
             short = session.removeprefix(SESSION_PREFIX + "-")
-            path  = shorten_path(meta.get("path", ""))
-            lines.append(f"    ▣ {short:<25}  {path}")
+            lines.append(f"    ▣ {short}")
             rows.append((session, True, False, False))
         lines.append("")
         rows.append((None, False, False, False))
@@ -371,8 +371,7 @@ def build_archived_rows() -> tuple[list[tuple], list[str]]:
         rows.append((None, False, False, False))
         for session, meta in sorted(ungrouped):
             short = session.removeprefix(SESSION_PREFIX + "-")
-            path  = shorten_path(meta.get("path", ""))
-            lines.append(f"    ▣ {short:<25}  {path}")
+            lines.append(f"    ▣ {short}")
             rows.append((session, True, False, False))
     return rows, lines
 
