@@ -301,8 +301,7 @@ def build_session_rows() -> tuple[list[tuple], list[str]]:
         rows.append((session, True, is_attached, is_running))
 
     for group, entries in sorted(groups.items()):
-        sample_path = shorten_path(os.path.dirname(entries[0][1].get("path", "")))
-        lines.append(f"  ◆ {group}  {sample_path}")
+        lines.append(f"  ◆ {group}")
         rows.append((None, False, False, False))
         for entry in sorted(entries, key=lambda x: x[0]):
             add_session(*entry)
@@ -358,8 +357,7 @@ def build_archived_rows() -> tuple[list[tuple], list[str]]:
         else:
             ungrouped.append((session, meta))
     for group, entries in sorted(groups.items()):
-        sample_path = shorten_path(os.path.dirname(entries[0][1].get("path", "")))
-        lines.append(f"  ◆ {group}  {sample_path}")
+        lines.append(f"  ◆ {group}")
         rows.append((None, False, False, False))
         for session, meta in sorted(entries):
             short = session.removeprefix(SESSION_PREFIX + "-")
